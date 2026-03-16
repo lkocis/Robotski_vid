@@ -1,3 +1,4 @@
+import math
 import os
 
 import cv2
@@ -23,6 +24,9 @@ found = False
 
 for p in pictures:
     if successes >= max_images:
+        pts = image_points[-1].reshape(board_height, board_width, 2)
+        dx = np.diff(pts[:, :, 0], axis=1)
+        avg_square_px = np.mean(np.abs(dx))
         break
 
     img = cv2.imread(p)
@@ -34,8 +38,7 @@ for p in pictures:
     img_clone = img.copy()
     img_gray = cv2.cvtColor(img_clone, cv2.COLOR_BGR2GRAY)
 
-    found, corners = cv2.findChessboardCorners(img_gray, board_size, 
-        cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
+    found, corners = cv2.findChessboardCorners(img_gray, board_size, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
     
     if found:
         print("Chessboard found in:", p)
@@ -114,6 +117,30 @@ cv2.imshow("Object Model", object_model)
 cv2.imshow("SIFT Keypoints on First Image", cv2.drawKeypoints(object_model, kp_first, None))
 cv2.waitKey(0)
 
+# Funtion for clicking coordinates on milimeter paper
+points = []
+def click(event,x,y,flags,param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        points.append([x,y])
+        print("Clicked:",x,y)
+
+cv2.imshow("image", undistorted_first)
+cv2.setMouseCallback("image", click)
+cv2.waitKey(0)
+
+image_pts = np.array(points, dtype=np.float32)
+
+y = 270
+x = 180
+world_pts = np.array([
+    [0,0],
+    [0,y],
+    [x,y],
+    [x,0]
+], dtype=np.float32)
+
+H, _ = cv2.findHomography(image_pts, world_pts)
+
 for p in pictures_object[1:]:
     print("Processing:", p)
     img = cv2.imread(p)
@@ -146,28 +173,44 @@ for p in pictures_object[1:]:
     pts = np.float32([[0, 0], [0, h_m - 1], [w_m - 1, h_m - 1], [w_m - 1, 0]]).reshape(-1, 1, 2)
     dst = cv2.perspectiveTransform(pts,M)
     dst += (w_m, 0)
+    dst_real = cv2.perspectiveTransform(pts,M)
 
     img_matches = cv2.drawMatches(object_model, kp_first, undistorted_img, kp_sec, good_matches, None, matchColor=(255,0,0), singlePointColor=(255,0,0), flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     img_matches = cv2.polylines(img_matches, [np.int32(dst)], True, (255,255,255),1, cv2.LINE_AA)
 
-    # Centroid - arithmetic mean of the corners of the detected object
-    cx = int(dst[:,0,0].mean())
-    cy = int(dst[:,0,1].mean())
-    cv2.circle(img_matches, (cx, cy), 5, (0,255,0), -1)
-    file_name = p.split('\\')[-1] 
-    save_path = os.path.join('Results', f"matched_{file_name}")
-    success = cv2.imwrite(save_path, img_matches)
-    cv2.imshow("Matched Features", img_matches)
+    # Centroid
+    if len(good_matches) > 0:
+        centroid = np.mean(dst, axis=0)
+        cv2.circle(img_matches, (int(centroid[0][0]), int(centroid[0][1])), 5, (0,255,0), -1)
+    cv2.imshow("Matches", img_matches)
     cv2.waitKey(0)
 
-    # Orientation - angle between the horizontal axis and the line connecting the first and last corner of the detected object
-    x1, y1 = dst[0,0]
-    x4, y4 = dst[3,0]
-    dx = x4 - x1
-    dy = y4 - y1
-    angle_rad = np.arctan2(dy, dx)
-    angle_deg = np.degrees(angle_rad)
-    print(f"Centroid: ({cx}, {cy}), Orientation: {angle_deg:.2f} degrees")
+    # Coordinates and orientation
+    pts = dst_real.reshape(4,2)
+    cx = np.mean(pts[:,0])
+    cy = np.mean(pts[:,1])
+    pixel = np.array([[[cx,cy]]], dtype=np.float32)
+    world = cv2.perspectiveTransform(pixel, H)
+
+    x_mm = world[0][0][0]
+    y_mm = world[0][0][1]
+
+    vec = pts[0] - pts[1] # Vector along the X-axis of the object
+    angle_rad = math.atan2(vec[1], vec[0])
+    angle_deg = math.degrees(angle_rad) 
+
+    # Drawing the orientation arrow
+    start_point = (int(pts[0][0]), int(pts[0][1]))
+    end_point = (int(pts[1][0]), int(pts[1][1]))
+    cv2.line(img_matches, start_point, end_point, (0, 0, 255), 3)
+    cv2.arrowedLine(img_matches, start_point, end_point, (0, 0, 255), 3, tipLength=0.3)
+    cv2.imshow("Orientation", img_matches)
+    cv2.waitKey(0)
+
+    print("Object position on paper:")
+    print("X =", x_mm, "mm")
+    print("Y =", y_mm, "mm")
+    print("Orientation:", angle_deg, "degrees")
 
 cv2.destroyAllWindows()
 
