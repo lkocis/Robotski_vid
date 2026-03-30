@@ -47,7 +47,6 @@ for p in pictures:
     else:
         print("Chessboard NOT found in:", p)
 
-    #cv2.imshow("Calibration", img_clone)
     cv2.waitKey(0)
 
 cv2.destroyAllWindows()
@@ -109,7 +108,6 @@ object_model = undistorted_first[y_f:y_f+h_roi, x_f:x_f+w_roi]
 sift = cv2.SIFT_create()
 kp_first, des_first = sift.detectAndCompute(object_model, None)
 
-#cv2.imshow("Object Model", object_model)
 cv2.imshow("SIFT Keypoints on First Image", cv2.drawKeypoints(object_model, kp_first, None))
 cv2.waitKey(0)
 
@@ -141,9 +139,10 @@ for p in pictures_object[1:]:
     M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
     h_m, w_m = object_model.shape[:2]
     pts = np.float32([[0, 0], [0, h_m - 1], [w_m - 1, h_m - 1], [w_m - 1, 0]]).reshape(-1, 1, 2)
-    dst_real = cv2.perspectiveTransform(pts, M) # for offset fix
+    dst_real = cv2.perspectiveTransform(pts, M) 
 
-    dst_draw = dst_real + np.array([[[w_m, 0]]])
+    # Drawing the matches, the outline of the object in the second image, and an arrow indicating the orientation of the object
+    dst_draw = dst_real + np.array([[[w_m, 0]]]) # for offset fix
     img_matches = cv2.drawMatches(object_model, kp_first, undistorted_img, kp_sec, good_matches, None, matchColor=(255,0,0), singlePointColor=(255,0,0), flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     img_matches = cv2.polylines(img_matches, [np.int32(dst_draw)], True, (255,255,255),1, cv2.LINE_AA)
     p1 = (int(dst_real[0][0][0] + w_m), int(dst_real[0][0][1]))
@@ -182,18 +181,16 @@ for p in pictures_object[1:]:
     H, _ = cv2.findHomography(image_pts, world_pts)
 
     # Coordinates and orientation
-    pts_img = dst_real.reshape(4,2)
-    cx = np.mean(pts_img[:,0])
-    cy = np.mean(pts_img[:,1])
+    pts_real = dst_real.reshape(4,2)
+    cx = np.mean(pts_real[:,0])
+    cy = np.mean(pts_real[:,1])
     pixel = np.array([[[cx, cy]]], dtype=np.float32)
     world = cv2.perspectiveTransform(pixel, H) # centroid in world coordinates
 
     x_mm = world[0][0][0]
     y_mm = world[0][0][1]
 
-    pts_real = np.array(pts_img, dtype=np.float32).reshape(-1,1,2)
     pts_world = cv2.perspectiveTransform(dst_real, H).reshape(4,2) # corners of paper in world coordinates
-
 
     vec = pts_world[1] - pts_world[0]
     angle_rad = math.atan2(vec[1], vec[0])
