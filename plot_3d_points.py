@@ -20,9 +20,17 @@ def main():
 
     ax = fig.add_subplot(1, 2, 1, projection='3d')
     ax.plot_trisurf(x, y, z, triangles=tri.triangles, cmap=plt.cm.Spectral)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Surface Plot of 3D Points')
 
     ax = fig.add_subplot(1, 2, 2, projection='3d')
     ax.scatter(-x, -y, -z)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Scatter Plot of 3D Points')
 
     plt.show()
 

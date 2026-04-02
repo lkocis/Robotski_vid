@@ -76,7 +76,8 @@ with open('camera_params.json', 'r') as f:
     params = json.load(f)
 camera_matrix = np.array(params['camera_matrix'])
 P = np.matrix(camera_matrix)
-E = P.T * np.matrix(F) * P
+F = np.matrix(F)
+E = P.T * F * P
 
 # Estimate the 3D points from the 2D correspondences using the essential matrix
 points_2d_L = [kp_first[m.queryIdx] for m in inlier_matches]
