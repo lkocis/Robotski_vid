@@ -15,8 +15,8 @@ def convert_2d_points_to_3d_points(points_2d_L, points_2d_R, E, P):
     W[1, 0] = 1
     W[2, 2] = 1
 
+    # how left camera is positioned in comparison to right camera
     A = np.matrix(U.dot(W).dot(Vt))
-
     b = U[:, 2]
 
     A_inv_b = A.I.dot(b)
@@ -70,14 +70,15 @@ def convert_2d_points_to_3d_points(points_2d_L, points_2d_R, E, P):
         Y[0, 0] = -y1[0, 0]
         Y[1, 0] = y2[0, 0]
 
+        # s and t minimize distance between left and right camera rays
         S = np.linalg.solve(X, Y)
-
         s = S[0, 0]
         t = S[1, 0]
 
         L_pi *= s
         AR_pi *= t
 
+        # 3D point is the midpoint between closest two points on the rays from left and right camera
         points_3d[i, :] = (L_pi + AR_pi - A_inv_b).squeeze() / 2
 
     return points_3d
