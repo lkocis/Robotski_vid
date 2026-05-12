@@ -2,36 +2,42 @@ import numpy as np
 import cv2
 from read_kinect_pic import read_kinect_pic
 import os
-import pyrealsense2 as rs
+from primesense import openni2
+from primesense import _openni2
 
 def take_pictures(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-    pipeline = rs.pipeline()
-    config = rs.config()
-    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+    openni2.initialize(r"C:\Program Files\OpenNI2\Redist") 
 
-    pipeline.start(config)
+    dev = openni2.Device.open_any()
+    
+    depth_stream = dev.create_depth_stream()
+    depth_stream.start()
+    depth_stream.set_video_mode(_openni2.OniVideoMode(pixelFormat=_openni2.OniPixelFormat.ONI_PIXEL_FORMAT_DEPTH_1_MM, resolutionX=640, resolutionY=480, fps=30))
+
+    color_stream = dev.create_color_stream()
+    color_stream.start()
+    color_stream.set_video_mode(_openni2.OniVideoMode(pixelFormat=_openni2.OniPixelFormat.ONI_PIXEL_FORMAT_RGB888, resolutionX=640, resolutionY=480, fps=30))
+
+    dev.set_image_registration_mode(openni2.IMAGE_REGISTRATION_DEPTH_TO_COLOR)
+
     count = 0
-
-    print("Camera started. Press SPACE to take a picture, ESC to exit.")
+    print("ASUS Xtion started. Press SPACE to take a picture, ESC to exit.")
 
     try:
-        while count < 10:
-            frames = pipeline.wait_for_frames()
-            depth_frame = frames.get_depth_frame()
-            color_frame = frames.get_color_frame()
+        while count < 5:
+            d_frame = depth_stream.read_frame()
+            c_frame = color_stream.read_frame()
 
-            if not depth_frame or not color_frame:
-                continue
+            d_data = d_frame.get_buffer_as_uint16()
+            depth_image = np.ndarray((d_frame.height, d_frame.width), dtype=np.uint16, buffer=d_data)
 
-            # Convert images to numpy arrays
-            depth_image = np.asanyarray(depth_frame.get_data())
-            color_image = np.asanyarray(color_frame.get_data())
+            c_data = c_frame.get_buffer_as_uint8()
+            color_image = np.ndarray((c_frame.height, c_frame.width, 3), dtype=np.uint8, buffer=c_data)
+            color_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2BGR)
 
-            # Show the color image
             cv2.imshow('Color Image', color_image)
 
             key = cv2.waitKey(1)
@@ -41,11 +47,13 @@ def take_pictures(path):
                 print(f"Saved depth and color images for count {count}")
                 count += 1
 
-            elif key == 27:  # ESC key to exit
+            elif key == 27:
                 break
 
     finally:
-        pipeline.stop()
+        depth_stream.stop()
+        color_stream.stop()
+        openni2.unload()
         cv2.destroyAllWindows()
 
 def find_dominant_plane(folder_path):
@@ -97,15 +105,16 @@ def find_dominant_plane(folder_path):
                         mask = d_pred <= distance_threshold
                         inliers = np.sum(mask)
 
+                        # 4., 5. If this plane has more inliers than the best one so far, update best plane
                         if inliers > max_inliers:
                             max_inliers = inliers
                             best_inliners_mask = mask
                     
                     except np.linalg.LinAlgError:
                         continue
-
+                
+                # 6. If we found a plane with inliers, color those inliers in the output image
                 if best_inliners_mask is not None:
-                    # Take inliers and color them in output image
                     inliner_points = points[best_inliners_mask]
 
                     for point in inliner_points:
@@ -121,7 +130,7 @@ def find_dominant_plane(folder_path):
                     
 
 def main():
-    path = r"C:\Users\Lana Kočiš\Downloads\Robotski_vid\LV3-images"
+    path = r"C:\Users\Lana Kočiš\Downloads\Robotski_vid\LV3_images"
     take_pictures(path)
     print("Processing depth images...")
 
