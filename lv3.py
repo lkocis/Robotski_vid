@@ -4,30 +4,38 @@ from read_kinect_pic import read_kinect_pic
 import os
 from primesense import openni2
 from primesense import _openni2
+import time
 
 def take_pictures(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
     openni2.initialize(r"C:\Program Files\OpenNI2\Redist") 
-
     dev = openni2.Device.open_any()
     
     depth_stream = dev.create_depth_stream()
-    depth_stream.start()
-    depth_stream.set_video_mode(_openni2.OniVideoMode(pixelFormat=_openni2.OniPixelFormat.ONI_PIXEL_FORMAT_DEPTH_1_MM, resolutionX=640, resolutionY=480, fps=30))
-
     color_stream = dev.create_color_stream()
+    
+    depth_stream.set_video_mode(_openni2.OniVideoMode(pixelFormat=_openni2.OniPixelFormat.ONI_PIXEL_FORMAT_DEPTH_1_MM, resolutionX=320, resolutionY=240, fps=30))
+    color_stream.set_video_mode(_openni2.OniVideoMode(pixelFormat=_openni2.OniPixelFormat.ONI_PIXEL_FORMAT_RGB888, resolutionX=320, resolutionY=240, fps=30))
+    
+    depth_stream.start()
     color_stream.start()
-    color_stream.set_video_mode(_openni2.OniVideoMode(pixelFormat=_openni2.OniPixelFormat.ONI_PIXEL_FORMAT_RGB888, resolutionX=640, resolutionY=480, fps=30))
 
     dev.set_image_registration_mode(openni2.IMAGE_REGISTRATION_DEPTH_TO_COLOR)
 
     count = 0
     print("ASUS Xtion started. Press SPACE to take a picture, ESC to exit.")
+    
+    time.sleep(2) 
 
     try:
-        while count < 5:
+        while count < 10:
+            try:
+                openni2.wait_for_any_stream([depth_stream, color_stream])
+            except _openni2.OpenNIError:
+                continue 
+
             d_frame = depth_stream.read_frame()
             c_frame = color_stream.read_frame()
 
@@ -36,20 +44,21 @@ def take_pictures(path):
 
             c_data = c_frame.get_buffer_as_uint8()
             color_image = np.ndarray((c_frame.height, c_frame.width, 3), dtype=np.uint8, buffer=c_data)
+            
             color_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2BGR)
 
             cv2.imshow('Color Image', color_image)
-
-            key = cv2.waitKey(1)
+            
+            # WaitKey gives more time for the stream to stabilize and ensures the window is responsive
+            key = cv2.waitKey(100) & 0xFF 
+            
             if key == ord(' '):
                 cv2.imwrite(os.path.join(path, f"sl-{count:05d}.bmp"), color_image)
                 np.savetxt(os.path.join(path, f"sl-{count:05d}-D.txt"), depth_image, fmt='%d')
-                print(f"Saved depth and color images for count {count}")
+                print(f"Saved {count}/10")
                 count += 1
-
             elif key == 27:
                 break
-
     finally:
         depth_stream.stop()
         color_stream.stop()
@@ -57,24 +66,36 @@ def take_pictures(path):
         cv2.destroyAllWindows()
 
 def find_dominant_plane(folder_path):
-    img_shape = (480, 640)
+    img_shape = (240, 320)
 
     # RANSAC parameters
     iterations = 500
-    distance_threshold = 5
     num_planes = 3
-    colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]
+    colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]  # red, green, blue
 
     for filename in os.listdir(folder_path):
         if filename.endswith("-D.txt"):
             depth_path = os.path.join(folder_path, filename)
             depth_image, point_3d_array, n_3d_points = read_kinect_pic(depth_path, img_shape)
 
+            color_filename = filename.replace("-D.txt", ".bmp")
+            color_path = os.path.join(folder_path, color_filename)
+            if os.path.exists(color_path):
+                color_image = cv2.imread(color_path)
+                cv2.imshow('Color Image', color_image)
+                cv2.imwrite(os.path.join(r"D:\Robotski_vid\LV3_planes", f"{filename[:-6]}-color.png"), color_image)
+            cv2.imshow('Depth Image', depth_image)
+            cv2.imwrite(os.path.join(r"D:\Robotski_vid\LV3_planes", f"{filename[:-6]}-depth.png"), depth_image)
+
             print(f"Processed {filename}:")
-            print(f"Depth image shape: {depth_image.shape}")
-            print(f"Number of 3D points: {n_3d_points}")
 
             points = np.array(point_3d_array)
+            points = points[points[:, 2] > 0] # filtering missing values
+
+            # Calculate depth range (max distance of point from plane to be considered an inlier)
+            depth_range = points[:,2].max() - points[:,2].min()
+            distance_threshold = depth_range * 0.03 # 10% of depth range
+
             output_img = cv2.cvtColor(depth_image, cv2.COLOR_GRAY2BGR)
 
             print("Running RANSAC to find dominant plane...")
@@ -123,6 +144,7 @@ def find_dominant_plane(folder_path):
 
                     points = points[~best_inliners_mask] # remove inliers for next iteration
 
+            cv2.imwrite(os.path.join(r"D:\Robotski_vid\LV3_planes", f"{filename[:-6]}-planes.png"), output_img)
             cv2.imshow('Dominant Planes', output_img)
             cv2.waitKey(500)
 
@@ -130,8 +152,8 @@ def find_dominant_plane(folder_path):
                     
 
 def main():
-    path = r"C:\Users\Lana Kočiš\Downloads\Robotski_vid\LV3_images"
-    take_pictures(path)
+    path = r"D:\Robotski_vid\LV3_images"
+    #take_pictures(path)
     print("Processing depth images...")
 
     find_dominant_plane(path)
