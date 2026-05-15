@@ -70,12 +70,12 @@ def take_pictures(path):
 
 
 def create_and_preprocess_pcds(object):
-    obj_path = os.path.join(r"C:\Users\Lana Kočiš\Downloads\Robotski_vid\LV4_images", f"object_{object}")
+    obj_path = os.path.join(r"D:\Robotski_vid\LV4_images", f"object_{object}")
     pcds = []
 
     intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
-    for i in range(5):
+    for i in range(10):
         color_path = os.path.join(obj_path, f"sl-{i:05d}.bmp")
         depth_path = os.path.join(obj_path, f"sl-{i:05d}-D.txt")
 
@@ -183,7 +183,7 @@ def RANSAC_and_ICP(source, target):
 
         
 def main():
-    path = r"C:\Users\Lana Kočiš\Downloads\Robotski_vid\LV4_images"
+    path = r"D:\Robotski_vid\LV4_images"
     for obj in range(1, 4):
         take_pictures(path, obj)
        
@@ -197,14 +197,24 @@ def main():
         # FPFH + TEASER++
         print(f"Object {obj}: Starting FPFH + TEASER++ registration.")
         target_teaser = cloud_list[0]
+        start_teaser = time.time()
+
         for i in range(1, len(cloud_list)):
             target_teaser, _ = FPFH_registration(cloud_list[i], target_teaser)
+
+        end_teaser = time.time()
+        print(f"FPFH + TEASER++ time: {end_teaser - start_teaser:.2f} seconds.")
 
         # RANSAC + ICP
         print(f"Object {obj}: Starting RANSAC + ICP registration.")
         target_ransac = cloud_list[0]
+        start_ransac = time.time()
+
         for i in range(1, len(cloud_list)):
             target_ransac, _ = RANSAC_and_ICP(cloud_list[i], target_ransac)
+            
+        end_ransac = time.time()
+        print(f"RANSAC + ICP time: {end_ransac - start_ransac:.2f} seconds.")
 
         o3d.visualization.draw_geometries([target_teaser], window_name=f"Final FPFH + TEASER++ Result for Object {obj}")
         o3d.visualization.draw_geometries([target_ransac], window_name=f"Final RANSAC + ICP Result for Object {obj}")
