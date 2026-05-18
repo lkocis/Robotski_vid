@@ -152,11 +152,11 @@ def find_dominant_plane(folder_path):
                     
 
 def main():
-    path = r"D:\Robotski_vid\LV3_images"
-    #take_pictures(path)
+    path = r"D:\Robotski_vid\LV4_images"
+    take_pictures(path)
     print("Processing depth images...")
 
-    find_dominant_plane(path)
+    #find_dominant_plane(path)
 
 if __name__ == "__main__":
     main()

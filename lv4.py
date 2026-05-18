@@ -9,7 +9,7 @@ from sklearn.neighbors import NearestNeighbors
 import teaserpp_python
 import time
 
-def take_pictures(path):
+def take_pictures(path, obj):
     if not os.path.exists(path):
         os.makedirs(path)
 
@@ -56,8 +56,8 @@ def take_pictures(path):
             key = cv2.waitKey(100) & 0xFF 
             
             if key == ord(' '):
-                cv2.imwrite(os.path.join(path, f"sl-{count:05d}.bmp"), color_image)
-                np.savetxt(os.path.join(path, f"sl-{count:05d}-D.txt"), depth_image, fmt='%d')
+                cv2.imwrite(os.path.join(path, f"obj-{obj:05d}-sl-{count:05d}.bmp"), color_image)
+                np.savetxt(os.path.join(path, f"obj-{obj:05d}-sl-{count:05d}-D.txt"), depth_image, fmt='%d')
                 print(f"Saved {count}/10")
                 count += 1
             elif key == 27:
@@ -84,7 +84,7 @@ def create_and_preprocess_pcds(object):
             continue
 
         color_img = o3d.io.read_image(color_path)
-        depth_data = np.load(depth_path) 
+        depth_data = np.loadtxt(depth_path, dtype=np.uint16)
         depth_img = o3d.geometry.Image(depth_data)
 
         rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(color_img, depth_img, depth_scale=1000.0, convert_rgb_to_intensity=False)
@@ -185,7 +185,7 @@ def RANSAC_and_ICP(source, target):
 def main():
     path = r"D:\Robotski_vid\LV4_images"
     for obj in range(1, 4):
-        take_pictures(path, obj)
+        #take_pictures(path, obj)
        
         cloud_list = create_and_preprocess_pcds(obj)
         if not cloud_list: 
