@@ -6,7 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 import open3d as o3d
 from sklearn.neighbors import NearestNeighbors
-import teaserpp_python
+#import teaserpp_python
 import time
 
 def take_pictures(path, obj):
@@ -76,8 +76,8 @@ def create_and_preprocess_pcds(object):
     intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
     for i in range(10):
-        color_path = os.path.join(obj_path, f"sl-{i:05d}.bmp")
-        depth_path = os.path.join(obj_path, f"sl-{i:05d}-D.txt")
+        color_path = os.path.join(obj_path, f"obj-{object:05d}-sl-{i:05d}.png")
+        depth_path = os.path.join(obj_path, f"obj-{object:05d}-sl-{i:05d}-D.txt")
 
         if not os.path.exists(color_path) or not os.path.exists(depth_path):
             print(f"File {color_path} or {depth_path} does not exist!")
@@ -91,7 +91,7 @@ def create_and_preprocess_pcds(object):
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
         
         # 1. Poduzorkovanje 
-        pcd = pcd.voxel_down_sample(voxel_size=0.01) 
+        pcd = pcd.voxel_down_sample(voxel_size=0.005) 
         
         # 2. Čišćenje šuma 
         pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
@@ -101,6 +101,13 @@ def create_and_preprocess_pcds(object):
 
     return pcds
 
+def convert_bmp_to_png(folder):
+    for f in os.listdir(folder):
+        if f.endswith(".bmp"):
+            path = os.path.join(folder, f)
+            img = cv2.imread(path)
+            cv2.imwrite(path.replace(".bmp", ".png"), img)
+    print("Conversion done.")
 
 def FPFH_registration(source, target):
     # a) Detection of descriptors using FPFH
@@ -120,27 +127,27 @@ def FPFH_registration(source, target):
     src_pts = np.asarray(source.points)[np.arange(len(indices))].T # getting real 3D points from source point cloud corresponding to the FPFH descriptors
     tgt_pts = np.asarray(target.points)[indices.flatten()].T
 
-    params = teaserpp_python.RobustRegistrationSolverParams(
-        cbar2=1,
-        noise_bound=1,
-        estimate_scaling=True,
-        rotation_estimation_algorithm=teaserpp_python.RotationEstimationAlgorithm.GNC_TLS,
-        rotation_gnc_factor=1.4,
-        rotation_max_iterations=100,
-        rotation_cost_threshold=1e-12
-    )
-    params.noise_bound = 0.05 # threshold for noise tolerance
-    params.estimate_scaling = False # RGB-D images do not have scaling issues, so we set this to False
-    params.rotation_estimation_algorithm = teaserpp_python.RotationEstimationAlgorithm.GNC_TLS # method for ignoring outliers in rotation estimation
+    #params = teaserpp_python.RobustRegistrationSolverParams(
+    #    cbar2=1,
+    #    noise_bound=1,
+    #    estimate_scaling=True,
+    #    rotation_estimation_algorithm=teaserpp_python.RotationEstimationAlgorithm.GNC_TLS,
+    #    rotation_gnc_factor=1.4,
+    #    rotation_max_iterations=100,
+    #    rotation_cost_threshold=1e-12
+    #)
+    #params.noise_bound = 0.05 # threshold for noise tolerance
+    #params.estimate_scaling = False # RGB-D images do not have scaling issues, so we set this to False
+    #params.rotation_estimation_algorithm = teaserpp_python.RotationEstimationAlgorithm.GNC_TLS # method for ignoring outliers in rotation estimation
 
-    solver = teaserpp_python.RobustRegistrationSolver(params) # initializing TEASER++ solver with the defined parameters
-    solver.solve(src_pts, tgt_pts) # takes paired points and finds the best transformation that aligns them
-    solution = solver.getSolution() # getting the resulting transformation parameters (rotation matrix and translation vector) - homogeneous transformation matrix
+    #solver = teaserpp_python.RobustRegistrationSolver(params) # initializing TEASER++ solver with the defined parameters
+    #solver.solve(src_pts, tgt_pts) # takes paired points and finds the best transformation that aligns them
+    #solution = solver.getSolution() # getting the resulting transformation parameters (rotation matrix and translation vector) - homogeneous transformation matrix
 
     # c) Calculate transformation matrix
     transformation = np.eye(4)
-    transformation[:3, :3] = solution.rotation
-    transformation[:3, 3] = solution.translation
+    #transformation[:3, :3] = solution.rotation
+    #transformation[:3, 3] = solution.translation
 
     # d) Transform the source and refresh the target point cloud
     source.transform(transformation)
@@ -151,9 +158,9 @@ def FPFH_registration(source, target):
 
 def RANSAC_and_ICP(source, target):
     # a) Global registration of source and target using RANSAC to find dominant planes
-    distance = 0.05
-    source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-    target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+    distance = 0.002
+    source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=30))
+    target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.025, max_nn=30))
 
     desc_source = o3d.pipelines.registration.compute_fpfh_feature(source, o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=100))
     desc_target = o3d.pipelines.registration.compute_fpfh_feature(target, o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=100))
@@ -177,13 +184,17 @@ def RANSAC_and_ICP(source, target):
     # c), d) Transform the source and refresh the target point cloud
     source.transform(result_icp.transformation)
     updated_target = target + source
-    o3d.visualization.draw_geometries([updated_target], window_name="RANSAC + ICP Registration Result")
 
     return updated_target, result_icp.transformation  
 
         
 def main():
     path = r"D:\Robotski_vid\LV4_images"
+
+    convert_bmp_to_png(r"D:\Robotski_vid\LV4_images\object_1")
+    convert_bmp_to_png(r"D:\Robotski_vid\LV4_images\object_2")
+    convert_bmp_to_png(r"D:\Robotski_vid\LV4_images\object_3")
+
     for obj in range(1, 4):
         #take_pictures(path, obj)
        
@@ -195,15 +206,15 @@ def main():
         print(f"Object {obj}: Target set. Ready for FPFH and TEASER++.")
 
         # FPFH + TEASER++
-        print(f"Object {obj}: Starting FPFH + TEASER++ registration.")
-        target_teaser = cloud_list[0]
-        start_teaser = time.time()
+        #print(f"Object {obj}: Starting FPFH + TEASER++ registration.")
+        #target_teaser = cloud_list[0]
+        #start_teaser = time.time()
 
-        for i in range(1, len(cloud_list)):
-            target_teaser, _ = FPFH_registration(cloud_list[i], target_teaser)
+        #for i in range(1, len(cloud_list)):
+        #    target_teaser, _ = FPFH_registration(cloud_list[i], target_teaser)
 
-        end_teaser = time.time()
-        print(f"FPFH + TEASER++ time: {end_teaser - start_teaser:.2f} seconds.")
+        #end_teaser = time.time()
+        #print(f"FPFH + TEASER++ time: {end_teaser - start_teaser:.2f} seconds.")
 
         # RANSAC + ICP
         print(f"Object {obj}: Starting RANSAC + ICP registration.")
@@ -216,7 +227,7 @@ def main():
         end_ransac = time.time()
         print(f"RANSAC + ICP time: {end_ransac - start_ransac:.2f} seconds.")
 
-        o3d.visualization.draw_geometries([target_teaser], window_name=f"Final FPFH + TEASER++ Result for Object {obj}")
+        #o3d.visualization.draw_geometries([target_teaser], window_name=f"Final FPFH + TEASER++ Result for Object {obj}")
         o3d.visualization.draw_geometries([target_ransac], window_name=f"Final RANSAC + ICP Result for Object {obj}")
 
 if __name__ == "__main__":

@@ -69,7 +69,7 @@ def find_dominant_plane(folder_path):
     img_shape = (240, 320)
 
     # RANSAC parameters
-    iterations = 500
+    iterations = 1000
     num_planes = 3
     colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]  # red, green, blue
 
@@ -94,7 +94,7 @@ def find_dominant_plane(folder_path):
 
             # Calculate depth range (max distance of point from plane to be considered an inlier)
             depth_range = points[:,2].max() - points[:,2].min()
-            distance_threshold = depth_range * 0.03 # 10% of depth range
+            distance_threshold = depth_range * 0.03 # 3% of depth range
 
             output_img = cv2.cvtColor(depth_image, cv2.COLOR_GRAY2BGR)
 
@@ -138,6 +138,7 @@ def find_dominant_plane(folder_path):
                 if best_inliners_mask is not None:
                     inliner_points = points[best_inliners_mask]
 
+
                     for point in inliner_points:
                         u, v = int(point[0]), int(point[1])
                         output_img[v, u] = colors[i]
@@ -152,11 +153,11 @@ def find_dominant_plane(folder_path):
                     
 
 def main():
-    path = r"D:\Robotski_vid\LV4_images"
-    take_pictures(path)
+    path = r"D:\Robotski_vid\LV3_images"
+    #take_pictures(path)
     print("Processing depth images...")
 
-    #find_dominant_plane(path)
+    find_dominant_plane(path)
 
 if __name__ == "__main__":
     main()
