@@ -69,7 +69,7 @@ def find_dominant_plane(folder_path):
     img_shape = (240, 320)
 
     # RANSAC parameters
-    iterations = 1000
+    iterations = 500
     num_planes = 3
     colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]  # red, green, blue
 
